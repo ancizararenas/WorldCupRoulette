@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>La Chusma Mundealera 2026 · Roulette Draw</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Sora:wght@400;500;600;700;800&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="pitch-lines" aria-hidden="true"></div>
+  <div class="floaters" id="floaters" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="ball" aria-hidden="true"></span>
+      <div>
+        <h1>La Chusma Mundealera 2026</h1>
+        <p class="tagline">The Roulette Draw</p>
+      </div>
+    </div>
+    <div class="top-right">
+      <button id="soundBtn" class="sound-btn pulse" title="Toggle theme music & sound">
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span id="soundLabel">Tap for sound</span>
+      </button>
+      <div class="conn" id="conn"><span class="dot"></span><span id="connText">connecting…</span></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ───────────── SETUP ───────────── -->
+    <section id="setup" class="card setup hidden">
+      <h2 class="section-title">Set up the draw</h2>
+      <p class="hint">Enter each player's first name and one team per player. The counts must match — every name gets paired with one team.</p>
+
+      <div class="count-row">
+        <label for="numPlayers">How many players?</label>
+        <input type="number" id="numPlayers" min="2" max="32" value="4" />
+        <button class="btn ghost" id="buildRows">Build fields</button>
+        <button class="btn ghost" id="sampleBtn">Load sample</button>
+      </div>
+
+      <div class="entry-head"><span>Players</span><span>Teams</span></div>
+      <div id="rows" class="rows"></div>
+
+      <div class="setup-actions">
+        <button class="btn ghost small" id="addRow">+ Add row</button>
+        <button class="btn primary" id="startBtn">Start the draw →</button>
+      </div>
+      <p class="error" id="setupError"></p>
+    </section>
+
+    <!-- ───────────── GAME ───────────── -->
+    <section id="game" class="hidden">
+      <div class="game-grid">
+
+        <div class="card wheel-card">
+          <div class="progress">
+            <div class="bar" id="progBar"></div>
+            <span class="progress-text" id="progText">0 / 0 drawn</span>
+          </div>
+
+          <div class="reveal" id="reveal">
+            <span class="reveal-label" id="revealLabel">Press spin to draw</span>
+            <span class="reveal-pair" id="revealPair">—</span>
+          </div>
+
+          <div class="wheel-stage" id="wheelStage">
+            <div class="pointer" aria-hidden="true"></div>
+            <div class="glow-ring" aria-hidden="true"></div>
+            <svg id="wheel" viewBox="0 0 400 400" role="img" aria-label="Roulette wheel of remaining teams"></svg>
+          </div>
+
+          <button class="btn spin" id="spinBtn">SPIN</button>
+          <p class="complete-msg hidden" id="completeMsg">🏆 Every team has been drawn!</p>
+        </div>
+
+        <aside class="side">
+          <div class="card pool">
+            <h3>Still in the draw <span class="pill" id="remainCount">0</span></h3>
+            <ul class="chips" id="remainPlayers"></ul>
+          </div>
+
+          <div class="card board">
+            <h3>Results</h3>
+            <table>
+              <thead><tr><th>#</th><th>Player</th><th>Team</th></tr></thead>
+              <tbody id="boardBody"></tbody>
+            </table>
+            <p class="empty-board" id="emptyBoard">No draws yet.</p>
+          </div>
+
+          <button class="btn danger" id="resetBtn">Reset &amp; start over</button>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- winner spotlight -->
+  <div id="winModal" class="win-modal hidden">
+    <div class="win-card">
+      <div class="win-flag" id="winFlag">⚽</div>
+      <div class="win-player" id="winPlayer">—</div>
+      <div class="win-arrow">drew</div>
+      <div class="win-team" id="winTeam">—</div>
+      <div class="win-sub">tap to continue</div>
+    </div>
+  </div>
+
+  <div id="confetti" class="confetti" aria-hidden="true"></div>
+
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
