@@ -69,13 +69,73 @@ function tx(fn) {
   catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 
-/* ── Selection rule (server-side only) ────────────────────────────────────── */
-const RIGGED_NAMES = new Set(['anci', 'ancizar']);
-const TOP_TEAMS    = new Set(['brazil', 'spain']);
-const norm     = (s) => String(s).trim().toLowerCase();
-const isRigged = (name) => RIGGED_NAMES.has(norm(name));
-const isTop    = (team) => TOP_TEAMS.has(norm(team));
-const pick     = (arr) => arr[Math.floor(Math.random() * arr.length)];
+/* ── Selection rule (server-side only) ──────────────────────────────────────
+ * Each "rigged" player is guaranteed one of their preferred teams whenever at
+ * least one of those teams is in the pool. Multiple rigged players are all
+ * satisfied simultaneously — the engine reserves teams so nobody is stranded —
+ * even when their preferred lists overlap (e.g. Spain appears in both below).  */
+const RIGGED = [
+  { names: ['anci', 'ancizar'], teams: ['brazil', 'spain'] },
+  { names: ['julian'],          teams: ['france', 'spain'] },
+];
+const norm = (s) => String(s).trim().toLowerCase();
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// preferred team list (lowercase) for a player name, or null if not rigged
+function preferredFor(name) {
+  const n = norm(name);
+  const g = RIGGED.find((r) => r.names.includes(n));
+  return g ? g.teams : null;
+}
+const isRiggedName = (name) => preferredFor(name) !== null;
+
+// Can every *armed* rigged player in `players` be matched to a DISTINCT preferred
+// team present in `teams`? "Armed" = their preferred list intersects the full pool
+// (`allTeamNames`) — so removing their last preferred team is a failure, not a free
+// pass. Non-armed rigged players (teams never in the pool) carry no constraint.
+function riggedSatisfiable(players, teams, allTeamNames) {
+  const armed = players.filter((p) => {
+    const pref = preferredFor(p.name);
+    return pref && pref.some((t) => allTeamNames.includes(t));
+  });
+  const tnames = teams.map((t) => norm(t.name));
+  const adj = armed.map((p) => {
+    const pref = preferredFor(p.name);
+    const idx = [];
+    tnames.forEach((tn, i) => { if (pref.includes(tn)) idx.push(i); });
+    return idx;
+  });
+  const owner = new Array(teams.length).fill(-1);
+  const assign = (u, seen) => {
+    for (const v of adj[u]) {
+      if (!seen[v]) {
+        seen[v] = true;
+        if (owner[v] === -1 || assign(owner[v], seen)) { owner[v] = u; return true; }
+      }
+    }
+    return false;
+  };
+  for (let u = 0; u < armed.length; u++) {
+    if (!assign(u, new Array(teams.length).fill(false))) return false;  // empty adj ⇒ fails
+  }
+  return true;
+}
+
+// Pick a team for `player` so every OTHER armed rigged player stays satisfiable.
+function chooseTeam(player, remainingPlayers, remainingTeams, allTeamNames) {
+  const pref = preferredFor(player.name);
+  let candidates;
+  if (pref) {
+    const present = remainingTeams.filter((t) => pref.includes(norm(t.name)));
+    candidates = present.length ? present : remainingTeams;   // none present → draw normally
+  } else {
+    candidates = remainingTeams;                              // not rigged → any team
+  }
+  const others = remainingPlayers.filter((p) => p.id !== player.id && isRiggedName(p.name));
+  const safe = candidates.filter((t) =>
+    riggedSatisfiable(others, remainingTeams.filter((x) => x.id !== t.id), allTeamNames));
+  return pick(safe.length ? safe : candidates);               // prefer safe, else best-effort
+}
 
 /* ── State (the only shape the client ever sees) ──────────────────────────── */
 function getState() {
@@ -102,9 +162,7 @@ app.post('/api/setup', (req, res) => {
   if (cleanPlayers.length !== cleanTeams.length)
     return res.status(400).json({ error: `Players (${cleanPlayers.length}) and teams (${cleanTeams.length}) must be the same count.` });
 
-  const hasBrazil = cleanTeams.some((t) => norm(t) === 'brazil');
-  const hasSpain  = cleanTeams.some((t) => norm(t) === 'spain');
-  const rigArmed  = cleanPlayers.some(isRigged) && hasBrazil && hasSpain ? 1 : 0;
+  const rigArmed = cleanPlayers.some(isRiggedName) ? 1 : 0;
 
   tx(() => {
     db.prepare('DELETE FROM players').run();
@@ -130,23 +188,9 @@ app.post('/api/spin', (_req, res) => {
   if (remainingPlayers.length === 0 || remainingTeams.length === 0)
     return res.status(409).json({ error: 'Game already complete.' });
 
+  const allTeams = db.prepare('SELECT name FROM teams').all().map((t) => norm(t.name));
   const player = pick(remainingPlayers);
-
-  let team;
-  if (game.rig_armed) {
-    const topRemaining    = remainingTeams.filter((t) => isTop(t.name));
-    const riggedUnmatched = remainingPlayers.filter((p) => isRigged(p.name)).length;
-    if (isRigged(player.name)) {
-      team = pick(topRemaining.length ? topRemaining : remainingTeams);
-    } else if (topRemaining.length > riggedUnmatched) {
-      team = pick(remainingTeams);
-    } else {
-      const nonTop = remainingTeams.filter((t) => !isTop(t.name));
-      team = pick(nonTop.length ? nonTop : remainingTeams);
-    }
-  } else {
-    team = pick(remainingTeams);
-  }
+  const team = chooseTeam(player, remainingPlayers, remainingTeams, allTeams);
 
   tx(() => {
     db.prepare('UPDATE players SET used = 1 WHERE id = ?').run(player.id);
