@@ -8,7 +8,7 @@
    Point at your API. Local dev = localhost:3000.
    Override with ?api=https://your-api ... in the URL.        */
 const API_BASE = (new URLSearchParams(location.search).get("api")
-  || "http://localhost:3000").replace(/\/$/, "");
+  || "https://worldcuproulette.onrender.com").replace(/\/$/, "");
 
 const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const SPIN_MS = REDUCED ? 2200 : 4300;     // must match #wheel-rot transition in CSS
