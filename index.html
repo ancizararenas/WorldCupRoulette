@@ -22,6 +22,7 @@
       </div>
     </div>
     <div class="top-right">
+      <span class="host-badge host-only" title="You opened the host link">HOST</span>
       <button id="soundBtn" class="sound-btn pulse" title="Toggle theme music & sound">
         <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span id="soundLabel">Tap for sound</span>
@@ -32,29 +33,67 @@
 
   <main class="wrap">
 
-    <!-- ───────────── SETUP ───────────── -->
-    <section id="setup" class="card setup hidden">
-      <h2 class="section-title">Set up the draw</h2>
-      <p class="hint">Enter each player's first name and one team per player. The counts must match — every name gets paired with one team.</p>
+    <!-- ───────────── STEP 1 · SETUP (host only) ───────────── -->
+    <section id="setup" class="card setup hidden host-only">
+      <div class="step-badge">Step 1 — Setup</div>
+      <h2 class="section-title">Choose the teams</h2>
+      <p class="hint">Enter the national teams that go into the roulette. The number of teams sets the number of players — that many people will be able to join.</p>
 
       <div class="count-row">
-        <label for="numPlayers">How many players?</label>
-        <input type="number" id="numPlayers" min="2" max="32" value="4" />
+        <label for="numTeams">How many teams?</label>
+        <input type="number" id="numTeams" min="2" max="48" value="6" />
         <button class="btn ghost" id="buildRows">Build fields</button>
         <button class="btn ghost" id="sampleBtn">Load sample</button>
       </div>
 
-      <div class="entry-head"><span>Players</span><span>Teams</span></div>
+      <div class="entry-head one"><span>Teams</span></div>
       <div id="rows" class="rows"></div>
 
       <div class="setup-actions">
-        <button class="btn ghost small" id="addRow">+ Add row</button>
-        <button class="btn primary" id="startBtn">Start the draw →</button>
+        <button class="btn ghost small" id="addRow">+ Add team</button>
+        <button class="btn primary" id="openLobbyBtn">Open the lobby →</button>
       </div>
       <p class="error" id="setupError"></p>
     </section>
 
-    <!-- ───────────── GAME ───────────── -->
+    <!-- ───────────── WAITING (players, before the lobby opens) ───────────── -->
+    <section id="waiting" class="card waiting hidden">
+      <div class="waiting-ball" aria-hidden="true">⚽</div>
+      <h2 class="section-title">Hang tight…</h2>
+      <p class="hint">The host is setting up the teams. This screen will update automatically the moment the lobby opens — then you can enter your name.</p>
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    </section>
+
+    <!-- ───────────── STEP 2 · LOBBY (players join by name) ───────────── -->
+    <section id="lobby" class="hidden">
+      <div class="lobby-grid">
+        <div class="card">
+          <div class="step-badge">Step 2 — Join</div>
+          <h2 class="section-title">Enter your name</h2>
+          <p class="hint">Type your name and tap join — it appears on everyone's screen instantly. The draw can start once the roster is full.</p>
+          <div class="join-row">
+            <input type="text" id="joinName" placeholder="Your name" maxlength="24" />
+            <button class="btn primary" id="joinBtn">Join</button>
+          </div>
+          <p class="error" id="lobbyError"></p>
+          <div class="teams-preview">
+            <h3>Teams in play <span class="pill" id="teamCount">0</span></h3>
+            <ul class="chips muted" id="lobbyTeams"></ul>
+          </div>
+        </div>
+
+        <aside class="card roster-card">
+          <h3>Players joined <span class="pill" id="rosterCount">0 / 0</span></h3>
+          <ul class="chips" id="roster"></ul>
+          <p class="lobby-note" id="lobbyNote"></p>
+          <button class="btn spin lobby-start" id="startBtn" disabled>START DRAW</button>
+          <button class="btn ghost small host-only" id="copyLinkLobby">Copy player link</button>
+          <button class="btn danger host-only" id="resetBtnLobby">Reset &amp; start over</button>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ───────────── STEP 3 · PLAY ───────────── -->
     <section id="game" class="hidden">
       <div class="game-grid">
 
@@ -65,7 +104,7 @@
           </div>
 
           <div class="reveal" id="reveal">
-            <span class="reveal-label" id="revealLabel">Press spin to draw</span>
+            <span class="reveal-label" id="revealLabel">Select your name, then spin</span>
             <span class="reveal-pair" id="revealPair">—</span>
           </div>
 
@@ -75,13 +114,17 @@
             <svg id="wheel" viewBox="0 0 400 400" role="img" aria-label="Roulette wheel of remaining teams"></svg>
           </div>
 
-          <button class="btn spin" id="spinBtn">SPIN</button>
+          <div class="spinner-row" id="spinnerRow">
+            <label for="spinner">Who's spinning?</label>
+            <select id="spinner"><option value="">Select your name…</option></select>
+          </div>
+          <button class="btn spin" id="spinBtn" disabled>SPIN</button>
           <p class="complete-msg hidden" id="completeMsg">🏆 Every team has been drawn!</p>
         </div>
 
         <aside class="side">
           <div class="card pool">
-            <h3>Still in the draw <span class="pill" id="remainCount">0</span></h3>
+            <h3>Still to spin <span class="pill" id="remainCount">0</span></h3>
             <ul class="chips" id="remainPlayers"></ul>
           </div>
 
@@ -94,7 +137,8 @@
             <p class="empty-board" id="emptyBoard">No draws yet.</p>
           </div>
 
-          <button class="btn danger" id="resetBtn">Reset &amp; start over</button>
+          <button class="btn ghost small host-only" id="copyLinkGame">Copy player link</button>
+          <button class="btn danger host-only" id="resetBtn">Reset &amp; start over</button>
         </aside>
       </div>
     </section>
