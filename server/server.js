@@ -150,46 +150,90 @@ function getState() {
 app.get('/api/state', (_req, res) => res.json(getState()));
 
 app.post('/api/setup', (req, res) => {
-  const { players, teams } = req.body || {};
-  if (!Array.isArray(players) || !Array.isArray(teams))
-    return res.status(400).json({ error: 'players and teams must be arrays' });
+  const { teams } = req.body || {};
+  if (!Array.isArray(teams))
+    return res.status(400).json({ error: 'teams must be an array' });
 
-  const cleanPlayers = players.map((p) => String(p).trim()).filter(Boolean);
-  const cleanTeams   = teams.map((t) => String(t).trim()).filter(Boolean);
-
-  if (cleanPlayers.length === 0)
-    return res.status(400).json({ error: 'Add at least one player.' });
-  if (cleanPlayers.length !== cleanTeams.length)
-    return res.status(400).json({ error: `Players (${cleanPlayers.length}) and teams (${cleanTeams.length}) must be the same count.` });
-
-  const rigArmed = cleanPlayers.some(isRiggedName) ? 1 : 0;
+  const cleanTeams = teams.map((t) => String(t).trim()).filter(Boolean);
+  if (cleanTeams.length < 2)
+    return res.status(400).json({ error: 'Add at least two teams.' });
+  if (new Set(cleanTeams.map(norm)).size !== cleanTeams.length)
+    return res.status(400).json({ error: 'Team names must be unique.' });
 
   tx(() => {
     db.prepare('DELETE FROM players').run();
     db.prepare('DELETE FROM teams').run();
     db.prepare('DELETE FROM results').run();
-    const insP = db.prepare('INSERT INTO players (name, used, position) VALUES (?, 0, ?)');
-    cleanPlayers.forEach((n, i) => insP.run(n, i));
     const insT = db.prepare('INSERT INTO teams (name, used, position) VALUES (?, 0, ?)');
     cleanTeams.forEach((n, i) => insT.run(n, i));
-    db.prepare(`UPDATE game SET status='active', rig_armed=?, created_at=? WHERE id=1`)
-      .run(rigArmed, new Date().toISOString());
+    db.prepare(`UPDATE game SET status='lobby', rig_armed=0, created_at=? WHERE id=1`)
+      .run(new Date().toISOString());
   });
 
   res.json(getState());
 });
 
-app.post('/api/spin', (_req, res) => {
-  const game = db.prepare('SELECT status, rig_armed FROM game WHERE id = 1').get();
+// A player adds their own name in the lobby; it syncs to everyone.
+app.post('/api/join', (req, res) => {
+  const game = db.prepare('SELECT status FROM game WHERE id = 1').get();
+  if (game.status !== 'lobby')
+    return res.status(409).json({ error: 'The lobby is not open.' });
+
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Enter a name.' });
+
+  const players = db.prepare('SELECT name FROM players').all();
+  const teamCount = db.prepare('SELECT COUNT(*) AS c FROM teams').get().c;
+  if (players.some((p) => norm(p.name) === norm(name)))
+    return res.status(409).json({ error: 'That name is already taken.' });
+  if (players.length >= teamCount)
+    return res.status(409).json({ error: `The lobby is full (${teamCount} players for ${teamCount} teams).` });
+
+  db.prepare('INSERT INTO players (name, used, position) VALUES (?, 0, ?)').run(name, players.length);
+  res.json(getState());
+});
+
+// Remove a name from the lobby (e.g. a mistaken entry).
+app.post('/api/unjoin', (req, res) => {
+  const game = db.prepare('SELECT status FROM game WHERE id = 1').get();
+  if (game.status !== 'lobby')
+    return res.status(409).json({ error: 'The lobby is not open.' });
+  const name = String((req.body || {}).name || '').trim();
+  db.prepare('DELETE FROM players WHERE name = ?').run(name);
+  res.json(getState());
+});
+
+// Lock the roster and begin. Requires players == teams.
+app.post('/api/start', (_req, res) => {
+  const game = db.prepare('SELECT status FROM game WHERE id = 1').get();
+  if (game.status !== 'lobby')
+    return res.status(409).json({ error: 'The lobby is not open.' });
+  const players = db.prepare('SELECT COUNT(*) AS c FROM players').get().c;
+  const teams   = db.prepare('SELECT COUNT(*) AS c FROM teams').get().c;
+  if (players === 0) return res.status(409).json({ error: 'No players have joined yet.' });
+  if (players !== teams)
+    return res.status(409).json({ error: `Need ${teams} players to match ${teams} teams — ${players} joined.` });
+
+  db.prepare(`UPDATE game SET status='active' WHERE id=1`).run();
+  res.json(getState());
+});
+
+app.post('/api/spin', (req, res) => {
+  const game = db.prepare('SELECT status FROM game WHERE id = 1').get();
   if (game.status !== 'active') return res.status(409).json({ error: 'No active game.' });
+
+  const selected = String((req.body || {}).player || '').trim();
+  if (!selected) return res.status(400).json({ error: 'Select your name before spinning.' });
 
   const remainingPlayers = db.prepare('SELECT id, name FROM players WHERE used = 0').all();
   const remainingTeams   = db.prepare('SELECT id, name FROM teams   WHERE used = 0').all();
   if (remainingPlayers.length === 0 || remainingTeams.length === 0)
     return res.status(409).json({ error: 'Game already complete.' });
 
+  const player = remainingPlayers.find((p) => norm(p.name) === norm(selected));
+  if (!player) return res.status(409).json({ error: 'That player has already drawn — pick another name.' });
+
   const allTeams = db.prepare('SELECT name FROM teams').all().map((t) => norm(t.name));
-  const player = pick(remainingPlayers);
   const team = chooseTeam(player, remainingPlayers, remainingTeams, allTeams);
 
   tx(() => {

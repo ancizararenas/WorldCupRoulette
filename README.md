@@ -1,15 +1,30 @@
-# World Cup 2026 — Roulette Draw
+# La Chusma Mundealera 2026 — Roulette Draw
 
-A shared roulette that pairs each player with a national team. Everyone watches
-the **same live draw** from their own phone or laptop: spin, a name + team are
-matched, the pair drops onto the results board, and both leave the pool. When the
-pool is empty the draw is complete. A **Reset** button clears everything and takes
-fresh entries.
+A shared roulette that pairs each player with a national team, played live across
+everyone's phones in three steps:
+
+1. **Setup** — a host enters the list of teams. The number of teams sets the number of player slots.
+2. **Lobby** — each player opens the site and types their name; every roster entry syncs to all devices instantly. The draw can start once the roster is full (players = teams).
+3. **Play** — each spinner selects their name, hits **SPIN**, and the wheel lands them a team. The pair drops onto the results board and both leave the pool until everyone's drawn.
+
+A **Reset** button clears everything and starts a brand-new game from step 1.
 
 - **Frontend** — pure HTML / CSS / JS (no build step) → host free on **GitHub Pages**.
 - **Backend** — a tiny **Express** REST API using **Node's built-in SQLite** (`node:sqlite`,
   no native module to compile) → needs **Node 24+** → host free on Render / Railway / Fly.
 - State lives centrally in the SQLite file, so every device sees the same game.
+
+### Host link vs. player link
+
+Open the site with a `?host=...` parameter (e.g. `https://you.github.io/repo/?host=1`) to
+get **host mode**: you'll see the team-setup screen and the **Reset** button, plus a
+**Copy player link** button. Share that copied link (the same URL *without* `?host`) with
+everyone else — they'll only see the teams and a box to enter their name. While the host is
+still choosing teams, players see a "hang tight" screen that flips to the lobby automatically.
+
+This gating is client-side (it controls what each device *shows*), which is plenty for a
+friendly game; it isn't hardened against someone hand-crafting API calls. Ask if you'd like
+a server-enforced host key.
 
 ```
 worldcup-roulette/
@@ -33,10 +48,15 @@ audio after the first tap/click, so music starts on first interaction.
 
 | Method | Path          | Purpose                                  |
 |--------|---------------|------------------------------------------|
-| GET    | `/api/state`  | Current game: players, teams, results    |
-| POST   | `/api/setup`  | `{ players:[], teams:[] }` — start a game |
-| POST   | `/api/spin`   | Resolve one draw → `{ player, team }`     |
-| POST   | `/api/reset`  | Wipe and return to setup                  |
+| GET    | `/api/state`  | Current game: status, players, teams, results       |
+| POST   | `/api/setup`  | `{ teams:[] }` — set the teams, open the lobby       |
+| POST   | `/api/join`   | `{ name }` — add a player to the lobby roster        |
+| POST   | `/api/unjoin` | `{ name }` — remove a name from the lobby            |
+| POST   | `/api/start`  | Lock the roster and begin (needs players = teams)   |
+| POST   | `/api/spin`   | `{ player }` — draw a team for that player           |
+| POST   | `/api/reset`  | Wipe everything and return to setup                 |
+
+`status` moves through `setup → lobby → active → complete`.
 
 All draw logic runs **server-side** and is never sent to the browser — clients
 only receive the final pairing. (If you want it kept fully private, publish only
